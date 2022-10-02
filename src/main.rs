@@ -64,14 +64,14 @@ fn setup_system(
 
 fn player_spawn_system(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     win_size: Res<WinSize>,
+    game_textures: Res<GameTextures>,
 ) {
 
     // get player sprites
     let bottom = -win_size.h / 2.; 
     commands.spawn_bundle(SpriteBundle{
-        texture: asset_server.load(PLAYER_SPRITE),
+        texture: game_textures.player.clone(),
         transform: Transform{
             translation: Vec3::new(0., bottom + PLAYER_SIZE.1/ 2. * SPRITE_SCALE + 5., 10.0),
             scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
