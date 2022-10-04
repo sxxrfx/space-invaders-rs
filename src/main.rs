@@ -8,6 +8,7 @@ mod player;
 const PLAYER_SPRITE: &str = "rusticon.png";
 const PLAYER_LASER_SPRITE: &str = "laser_a_01.png";
 const PLAYER_SIZE: (f32, f32) = (144., 75.);
+const PLAYER_LASER_SIZE: (f32, f32) = (9., 54.);
 const WINDOW_WIDTH: i32 = 800;
 const WINDOW_HEIGHT: i32 = 720;
 const SPRITE_SCALE: f32 = 0.5;
@@ -55,6 +56,7 @@ fn setup_system(
     // add GameTextures resource
     let game_textures = GameTextures {
         player: asset_server.load(PLAYER_SPRITE),
+        player_laser: asset_server.load(PLAYER_LASER_SPRITE),
     };
     commands.insert_resource(game_textures);
 
