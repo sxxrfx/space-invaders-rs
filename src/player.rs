@@ -1,6 +1,6 @@
 use crate::{
-    components::{Movable, Player, Velocity},
-    GameTextures, WinSize, BASE_SPEED, PLAYER_SIZE, SPRITE_SCALE, TIME_STEP,
+    components::{Movable, Player, Velocity, FromPlayer, SpriteSize},
+    GameTextures, WinSize, BASE_SPEED, PLAYER_SIZE, SPRITE_SCALE, TIME_STEP, PLAYER_LASER_SIZE,
 };
 use bevy::prelude::*;
 
@@ -34,7 +34,10 @@ fn player_spawn_system(
             ..Default::default()
         })
         .insert(Player)
-        .insert(Movable { auto_despawn: false })
+        .insert(SpriteSize::from(PLAYER_SIZE))
+        .insert(Movable {
+            auto_despawn: false,
+        })
         .insert(Velocity { x: 0.0, y: 0.0 });
 }
 
@@ -47,19 +50,25 @@ fn player_fire_system(
     if let Ok(player_tf) = query.get_single() {
         if kb.just_pressed(KeyCode::Space) {
             let (x, y) = (player_tf.translation.x, player_tf.translation.y);
-
-            commands
-                .spawn_bundle(SpriteBundle {
-                    texture: game_textures.player_laser.clone(),
-                    transform: Transform {
-                        translation: Vec3::new(x, y, 0.),
-                        scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
+            let x_offset: f32 = PLAYER_SIZE.0 / 2. * SPRITE_SCALE - 3.;
+            let mut spawn_laser = |x_offset: f32| {
+                commands
+                    .spawn_bundle(SpriteBundle {
+                        texture: game_textures.player_laser.clone(),
+                        transform: Transform {
+                            translation: Vec3::new(x + x_offset, y + 15., 0.),
+                            scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .insert(Movable { auto_despawn: true })
-                .insert(Velocity { x: 0.0, y: 1.0 });
+                    })
+                    .insert(FromPlayer)
+                    .insert(SpriteSize::from(PLAYER_LASER_SIZE))
+                    .insert(Movable { auto_despawn: true })
+                    .insert(Velocity { x: 0.0, y: 1.0 });
+            };
+            spawn_laser(x_offset);
+            spawn_laser(-x_offset);
         }
     };
 }
@@ -75,28 +84,6 @@ fn player_keyboard_event_system(
             1.
         } else {
             0.
-        }
-    }
-}
-
-fn movable_system(
-    mut commands: Commands,
-    win_size: Res<WinSize>,
-    mut query: Query<(Entity, &Velocity, &mut Transform, &Movable)>
-) {
-    for (entity, velocity, mut transform, movable) in query.iter_mut() {
-        let translation = &mut transform.translation;
-        translation.x += velocity.x * TIME_STEP * BASE_SPEED;
-        translation.y += velocity.y * TIME_STEP * BASE_SPEED;
-        if movable.auto_despawn {
-            const MARGIN: f32 = 200.;
-            if translation.y > win_size.h / 2. + MARGIN
-            || translation.y < -win_size.h / 2. - MARGIN
-            || translation.x > win_size.w / 2. + MARGIN
-            || translation.x < -win_size.w / 2. - MARGIN {
-                // println!("->> despawn {entity:?}");
-                commands.entity(entity).despawn();
-            }
         }
     }
 }
