@@ -1,5 +1,5 @@
-use bevy::{prelude::*, math::Vec3Swizzles, sprite::collide_aabb::collide};
-use components::{Velocity, Movable, SpriteSize, Laser, FromPlayer, Enemy};
+use bevy::{math::Vec3Swizzles, prelude::*, sprite::collide_aabb::collide, ecs::entity};
+use components::{Enemy, FromPlayer, Laser, Movable, SpriteSize, Velocity, ExplosionToSpawn, Explosion, ExplosionTimer};
 use enemy::EnemyPlugin;
 use player::PlayerPlugin;
 
@@ -12,10 +12,13 @@ const PLAYER_SPRITE: &str = "rusticon.png";
 const PLAYER_LASER_SPRITE: &str = "laser_a_01.png";
 const ENEMY_SPRITE: &str = "enemy_a_01.png";
 const ENEMY_LASER_SPRITE: &str = "laser_b_01.png";
+const EXPLOSION_SHEET: &str = "explo_a_sheet.png";
+
 const PLAYER_SIZE: (f32, f32) = (144., 75.);
 const PLAYER_LASER_SIZE: (f32, f32) = (9., 54.);
 const ENEMY_SIZE: (f32, f32) = (144., 75.);
 const ENEMY_LASER_SIZE: (f32, f32) = (17., 55.);
+
 const WINDOW_WIDTH: i32 = 800;
 const WINDOW_HEIGHT: i32 = 720;
 const SPRITE_SCALE: f32 = 0.5;
@@ -32,6 +35,7 @@ pub struct GameTextures {
     player_laser: Handle<Image>,
     enemy: Handle<Image>,
     enemy_laser: Handle<Image>,
+    explosion: Handle<TextureAtlas>,
 }
 
 fn main() {
@@ -54,6 +58,7 @@ fn main() {
 fn setup_system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut windows: ResMut<Windows>,
 ) {
     // capture window size
@@ -64,12 +69,18 @@ fn setup_system(
     // add WinSize resource
     commands.insert_resource(win_size);
 
+    // create explosion texture atlas
+    let texture_handle = asset_server.load(EXPLOSION_SHEET);
+    let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(64., 64.), 4, 4);
+    let explosion = texture_atlases.add(texture_atlas);
+
     // add GameTextures resource
     let game_textures = GameTextures {
         player: asset_server.load(PLAYER_SPRITE),
         player_laser: asset_server.load(PLAYER_LASER_SPRITE),
         enemy: asset_server.load(ENEMY_SPRITE),
         enemy_laser: asset_server.load(ENEMY_LASER_SPRITE),
+        explosion: explosion,
     };
     commands.insert_resource(game_textures);
 
@@ -106,12 +117,11 @@ fn movable_system(
     }
 }
 
-
 fn player_laser_hit_enemy_system(
     mut commands: Commands,
     laser_query: Query<(Entity, &Transform, &SpriteSize), (With<Laser>, With<FromPlayer>)>,
     enemy_query: Query<(Entity, &Transform, &SpriteSize), With<Enemy>>,
-){
+) {
     for (laser_entity, laser_tf, laser_size) in laser_query.iter() {
         let laser_scale = Vec2::from(laser_tf.scale.xy());
 
@@ -124,12 +134,49 @@ fn player_laser_hit_enemy_system(
                 enemy_tf.translation,
                 enemy_size.0 * enemy_scale,
             );
-            
+
             if let Some(_) = collision {
                 commands.entity(enemy_entity).despawn();
                 commands.entity(laser_entity).despawn();
+                commands.spawn().insert(ExplosionToSpawn(enemy_tf.translation.clone()));
             }
-
         }
-    } 
+    }
+}
+
+
+fn explosion_to_spawn_system(
+    mut commands: Commands,
+    game_textures:Res<GameTextures>,
+    query: Query<(Entity, &ExplosionToSpawn)>,
+){
+    for (explosion_spawn_entity, explosion_to_spawn) in query.iter() {
+        commands.spawn_bundle(SpriteSheetBundle{
+            texture_atlas: game_textures.explosion.clone(),
+            transform: Transform
+            {
+                translation: explosion_to_spawn.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Explosion)
+        .insert(ExplosionTimer::default());
+
+        commands.entity(explosion_spawn_entity).despawn();
+    }
+}
+
+fn explosion_animation_system(
+    mut commands: Commands,
+    time:Res<Time>,
+    mut query: Query<(Entity, &mut ExplosionTimer, &TextureAtlasSprite), With<Explosion>>,
+){
+    for (entity, mut timer, mut sprite) in query.iter_mut() {
+        timer.0.tick(time.delta());
+
+        if timer.0.finished() {
+            sprite.index += 1;
+        }
+    }
 }
