@@ -5,11 +5,17 @@ use crate::{
 use bevy::{prelude::*, time::FixedTimestep, ecs::schedule::ShouldRun};
 use rand::{thread_rng, Rng};
 
+use self::formation::FormationMaker;
+
+pub mod formation;
+
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(
+        app
+            .insert_resource(FormationMaker::default())
+        .add_system_set(
             SystemSet::new()
             // .with_run_criteria(step)
             .with_run_criteria(FixedTimestep::step(1.))
@@ -35,18 +41,14 @@ fn enemy_fire_criteria() -> ShouldRun {
 fn enemy_spawn_system(
     mut commands: Commands,
     mut enemy_count: ResMut<EnemyCount>,
+    mut formation_maker: ResMut<FormationMaker>,
     game_textures: Res<GameTextures>,
     win_size: Res<WinSize>,
 ) {
     if enemy_count.0 < ENEMY_MAX {
-        // compute the x/y
-        let mut rng = thread_rng();
-
-        let w_span = win_size.w / 2. - 100.;
-        let h_span = win_size.h / 2. - 100.;
-
-        let x = rng.gen_range(-w_span..w_span);
-        let y = rng.gen_range(-h_span..h_span);
+        // get formation and start x/y
+        let formation = formation_maker.make(&win_size);
+        let (x, y) = formation.start;
 
         commands
             .spawn_bundle(SpriteBundle {
@@ -59,6 +61,7 @@ fn enemy_spawn_system(
                 ..Default::default()
             })
             .insert(Enemy)
+            .insert(formation)
             .insert(SpriteSize::from(ENEMY_SIZE));
 
         enemy_count.0 += 1;

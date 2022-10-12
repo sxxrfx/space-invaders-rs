@@ -7,6 +7,7 @@ use components::{
 };
 use enemy::EnemyPlugin;
 use player::PlayerPlugin;
+use enemy::formation::Formation;
 
 mod components;
 mod enemy;
@@ -32,6 +33,7 @@ const TIME_STEP: f32 = 1. / 60.;
 const BASE_SPEED: f32 = 500.;
 
 const ENEMY_MAX: u32 = 2;
+const FORMATION_MEMBERS_MAX: u32 = 2;
 const PLAYER_RESPAWN_DELAY: f64 = 2.;
 // END: Game Constants
 pub struct WinSize {
@@ -282,22 +284,23 @@ fn explosion_animation_system(
 
 fn enemy_movement_system(
     time: Res<Time>,
-    mut query: Query<&mut Transform, With<Enemy>>
+    mut query: Query<(&mut Transform, &mut Formation), With<Enemy>>
 ){
     let now = time.seconds_since_startup() as f32;
 
-    for mut transform in query.iter_mut() {
+    for (mut transform, mut formation) in query.iter_mut() {
         
         let (x_org, y_org) = (transform.translation.x, transform.translation.y);
 
-        let max_distance = TIME_STEP * BASE_SPEED;
+        let max_distance = TIME_STEP * formation.speed;
 
-        let dir: f32 = -1.; // 1 for counter clockwise, -1 clockwise
-        let (x_pivot, y_pivot) = (0., 0.);
-        let (x_radius, y_radius) = (200., 130.);
+        // 1 for counter clockwise, -1 clockwise
+        let dir: f32 = if formation.start.0 < 0. {1.} else {-1.};
+        let (x_pivot, y_pivot) = formation.pivot;
+        let (x_radius, y_radius) = formation.radius;
 
         // compute next angle (based on time for now)
-        let angle = dir * BASE_SPEED * TIME_STEP * now % 360. / PI as f32;
+        let angle = formation.angle + dir * formation.speed * TIME_STEP / (x_radius.min(y_radius) * PI as f32 / 2.);
 
         // compute target x/y
         let x_dst = x_radius * angle.cos() + x_pivot;
@@ -314,6 +317,11 @@ fn enemy_movement_system(
         let x = if dx > 0. { x.max(x_dst)} else { x.min(x_dst)};
         let y = y_org - dy * distance_ratio;
         let y = if dy > 0. { y.max(y_dst)} else { y.min(y_dst)};
+
+        // start rotating the formation angle only when sprite is on or close to ellipse
+        if distance < max_distance * formation.speed / 20. {
+            formation.angle = angle;
+        }
 
         let translation = &mut transform.translation;
         (translation.x, translation.y) = (x, y);
