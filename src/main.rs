@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use bevy::{math::Vec3Swizzles, prelude::*, sprite::collide_aabb::collide, ecs::entity};
 use components::{Enemy, FromPlayer, Laser, Movable, SpriteSize, Velocity, ExplosionToSpawn, Explosion, ExplosionTimer};
 use enemy::EnemyPlugin;
@@ -18,6 +20,7 @@ const PLAYER_SIZE: (f32, f32) = (144., 75.);
 const PLAYER_LASER_SIZE: (f32, f32) = (9., 54.);
 const ENEMY_SIZE: (f32, f32) = (144., 75.);
 const ENEMY_LASER_SIZE: (f32, f32) = (17., 55.);
+const EXPLOSION_LEN: usize = 16;
 
 const WINDOW_WIDTH: i32 = 800;
 const WINDOW_HEIGHT: i32 = 720;
@@ -52,6 +55,8 @@ fn main() {
         .add_plugin(PlayerPlugin)
         .add_plugin(EnemyPlugin)
         .add_system(player_laser_hit_enemy_system)
+        .add_system(explosion_to_spawn_system)
+        .add_system(explosion_animation_system)
         .run();
 }
 
@@ -122,6 +127,7 @@ fn player_laser_hit_enemy_system(
     laser_query: Query<(Entity, &Transform, &SpriteSize), (With<Laser>, With<FromPlayer>)>,
     enemy_query: Query<(Entity, &Transform, &SpriteSize), With<Enemy>>,
 ) {
+    let despawned_entities: HashSet<Entity> = HashSet::new();
     for (laser_entity, laser_tf, laser_size) in laser_query.iter() {
         let laser_scale = Vec2::from(laser_tf.scale.xy());
 
@@ -137,7 +143,9 @@ fn player_laser_hit_enemy_system(
 
             if let Some(_) = collision {
                 commands.entity(enemy_entity).despawn();
+                despawned_entities.insert(enemy_entity);
                 commands.entity(laser_entity).despawn();
+                despawned_entities.insert(laser_entity);
                 commands.spawn().insert(ExplosionToSpawn(enemy_tf.translation.clone()));
             }
         }
@@ -170,13 +178,16 @@ fn explosion_to_spawn_system(
 fn explosion_animation_system(
     mut commands: Commands,
     time:Res<Time>,
-    mut query: Query<(Entity, &mut ExplosionTimer, &TextureAtlasSprite), With<Explosion>>,
+    mut query: Query<(Entity, &mut ExplosionTimer, &mut TextureAtlasSprite), With<Explosion>>,
 ){
     for (entity, mut timer, mut sprite) in query.iter_mut() {
         timer.0.tick(time.delta());
 
         if timer.0.finished() {
             sprite.index += 1;
+            if sprite.index >= EXPLOSION_LEN {
+                commands.entity(entity).despawn();
+            }
         }
     }
 }
